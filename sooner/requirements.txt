@@ -1,0 +1,4 @@
+uagents
+pydantic
+pytest
+pytest-asyncio
