@@ -1,0 +1,21 @@
+{
+  "_notice": "SYNTHETIC DEMO DATA. These clinics are not real.",
+  "clinics": [
+    {"clinic_id": "clinic_downtown", "name": "Downtown Family Care (demo)", "address": "100 Market St, San Francisco, CA",
+     "lat": 37.7936, "lng": -122.3965, "specialties": ["dermatology", "general"], "insurance": ["Aetna", "Blue Shield"], "deposit_pct": 0.2,
+     "slots": [
+       {"slot_id": "dt-1", "time": "2026-10-26T09:00:00", "price": 150},
+       {"slot_id": "dt-2", "time": "2026-10-26T14:00:00", "price": 150},
+       {"slot_id": "dt-3", "time": "2026-10-27T10:00:00", "price": 140}]},
+    {"clinic_id": "clinic_bayside", "name": "Bayside Skin Clinic (demo)", "address": "55 Embarcadero, San Francisco, CA",
+     "lat": 37.7955, "lng": -122.3937, "specialties": ["dermatology"], "insurance": ["Aetna", "Kaiser", "Cigna"], "deposit_pct": 0.1,
+     "slots": [
+       {"slot_id": "bs-1", "time": "2026-10-26T08:30:00", "price": 220},
+       {"slot_id": "bs-2", "time": "2026-10-28T11:00:00", "price": 200}]},
+    {"clinic_id": "clinic_northgate", "name": "Northgate Medical (demo)", "address": "900 Northgate Dr, San Rafael, CA",
+     "lat": 37.9735, "lng": -122.5311, "specialties": ["general", "dermatology"], "insurance": ["Blue Shield", "Cigna"], "deposit_pct": 0.15,
+     "slots": [
+       {"slot_id": "ng-1", "time": "2026-10-26T08:00:00", "price": 120},
+       {"slot_id": "ng-2", "time": "2026-10-27T15:00:00", "price": 110}]}
+  ]
+}
