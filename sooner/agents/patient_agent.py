@@ -3,10 +3,10 @@ from pathlib import Path
 from typing import Awaitable, Callable, Optional
 
 from sooner.agents.intent import parse_intent
-from sooner.cards.interactive_cards import offers_cards, parse_tap, render_text
+from sooner.cards.interactive_cards import offers_cards, render_text, resolve_choice
 from sooner.shared.config import SYNTHETIC_NOTICE
 from sooner.shared.models import (BookingRequest, BookingResult, LatLng, PaymentIntent,
-                                  PaymentReceipt, RankedOffers, SlotRequest)
+                                  PaymentReceipt, RankedOffers, SlotOffer, SlotRequest)
 
 
 class PatientLogic:
@@ -14,20 +14,44 @@ class PatientLogic:
                  book: Callable[[str, BookingRequest], Awaitable[BookingResult]],
                  pay: Callable[[PaymentIntent], Awaitable[PaymentReceipt]],
                  location: LatLng = LatLng(lat=37.7946, lng=-122.3950),
-                 address: str = "1 Demo Way, San Francisco, CA", llm=None, now=None):
+                 address: str = "1 Demo Way, San Francisco, CA", llm=None, now=None, store=None, sender: str = ""):
         self.ask_matchmaker, self.book, self.pay = ask_matchmaker, book, pay
         self.location, self.address, self.llm, self.now = location, address, llm, now
-        self.offers: dict = {}  # (clinic_id, slot_id) -> SlotOffer from the last search
+        self.store, self.sender = store, sender
+        self.offers: dict = {}  # (clinic_id, slot_id) -> SlotOffer, in ranked order
+        if store is not None:  # offers survive between messages (hosted agents keep no globals)
+            for raw in store.get(f"offers:{sender}", []):
+                o = SlotOffer.parse_raw(raw)
+                self.offers[(o.clinic_id, o.slot_id)] = o
+
+    def _remember(self, offers) -> None:
+        self.offers = {(o.clinic_id, o.slot_id): o for o in offers}
+        if self.store is not None:
+            self.store.set(f"offers:{self.sender}", [o.json() for o in offers])
+
+    def accept_reoffer(self, ranked: RankedOffers) -> str:
+        """A cancelled slot matched a waiting search: remember the offers and tell the user."""
+        self._remember(ranked.offers)
+        return "A slot just opened up!\n" + render_text(offers_cards(ranked.offers)) + "\nReply 'book 1' to take it."
 
     async def handle_message(self, text: str) -> str:
-        tap = parse_tap(text)
-        return await (self._confirm(*tap) if tap else self._search(text))
+        choice = resolve_choice(text, list(self.offers.values()))
+        if choice is None:
+            return await self._search(text)
+        if not self.offers:
+            return "I have no offers for you yet. Please search first, e.g. 'dermatologist, Aetna'."
+        if choice == "ambiguous":
+            return "That matches more than one clinic. Reply with the number, e.g. 'book 1'."
+        if choice == "unknown":
+            return "I couldn't find that offer. Reply with a number from the list, e.g. 'book 1'."
+        return await self._confirm(*choice)
 
     async def _search(self, text: str) -> str:
         req = parse_intent(text, self.location, self.address, now=self.now, llm=self.llm)
         ranked = await self.ask_matchmaker(req)  # shows whatever arrived before the timeout
-        self.offers = {(o.clinic_id, o.slot_id): o for o in ranked.offers}
-        return render_text(offers_cards(ranked.offers))
+        self._remember(ranked.offers)
+        return render_text(offers_cards(ranked.offers)) + (
+            "\nReply 'book 1' (or 'book <clinic name>') to book." if ranked.offers else "")
 
     async def _confirm(self, clinic_id: str, slot_id: str) -> str:
         offer = self.offers.get((clinic_id, slot_id))
@@ -35,16 +59,17 @@ class PatientLogic:
             return "That offer is no longer available. Please search again."
         booking_id = f"{offer.request_id}-{slot_id}"
         receipt = await self.pay(PaymentIntent(booking_id=booking_id, amount=offer.deposit))
-        result = await self.book(clinic_id, BookingRequest(
+        result = await self.book(offer.agent_address or clinic_id, BookingRequest(
             request_id=offer.request_id, clinic_id=clinic_id, slot_id=slot_id,
             patient_address=self.address, expected_version=offer.slot_version))
         if result.ok:
             await self.pay(PaymentIntent(booking_id=booking_id, amount=offer.deposit, status="release"))
             return (f"Booked {offer.clinic_name} at {offer.slot_time:%a %b %d %I:%M %p}. "
-                    f"Confirmation {result.confirmation_id}. Deposit ${offer.deposit:.2f} "
+                    f"Confirmation {result.confirmation_id}. Deposit ${offer.deposit:.2f} (simulated) "
                     f"released to clinic (tx {receipt.tx_ref}). {SYNTHETIC_NOTICE}")
         await self.pay(PaymentIntent(booking_id=booking_id, amount=offer.deposit, status="refund"))
         self.offers.pop((clinic_id, slot_id), None)
+        self._remember(list(self.offers.values()))
         return (f"Sorry, that slot was just taken ({result.reason}). Your deposit was refunded. "
                 "Try another offer or search again.")
 

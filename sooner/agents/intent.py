@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Callable, Optional
 
 from sooner.shared import config
+from sooner.shared.specialty import normalize_specialty  # noqa: F401  (re-exported)
 from sooner.shared.models import LatLng, SlotRequest, TimeWindow
 
 PROMPT = ("Extract a medical appointment request as JSON with keys: specialty (string), "
@@ -38,17 +39,6 @@ def regex_parse(text: str) -> dict:
             "insurance": ins.group(1).title() if ins else "Aetna",
             "max_deposit": float(dep.group(1)) if dep else 50.0,
             "radius_miles": float(rad.group(1)) if rad else 10.0}
-
-
-SPECIALTY_ALIASES = {"dermatologist": "dermatology", "skin": "dermatology",
-                     "primary care": "general", "primary": "general", "gp": "general",
-                     "dentist": "dental", "dentistry": "dental"}
-
-
-def normalize_specialty(value: str) -> str:
-    """The LLM may say 'dermatologist'; clinics advertise 'dermatology'."""
-    v = str(value).strip().lower()
-    return SPECIALTY_ALIASES.get(v, v)
 
 
 def parse_intent(text: str, location: LatLng, address: str, now: Optional[datetime] = None,

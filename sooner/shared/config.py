@@ -9,6 +9,9 @@ RETRY_DELAY_S = 0.2
 PORTS = {"patient": 8100, "matchmaker": 8001, "escrow": 8002,
          "clinic_downtown": 8010, "clinic_bayside": 8011, "clinic_northgate": 8012}
 
+# One of the 8 free-tier hosted agents always stays free for onboarding or redeploys.
+MAX_DEDICATED_CLINIC_AGENTS = int(os.getenv("MAX_DEDICATED_CLINIC_AGENTS", "2"))
+
 CLINIC_IDS = ["clinic_downtown", "clinic_bayside", "clinic_northgate"]
 
 

@@ -1,5 +1,6 @@
 """EscrowAgent: holds the deposit, releases on confirmed booking, refunds on cancellation."""
 from sooner.core.escrow import Escrow, EscrowError
+from sooner.core.store import MemoryStore
 from sooner.shared import config
 from sooner.shared.models import PaymentIntent, PaymentReceipt
 
@@ -7,16 +8,20 @@ TESTNET_LABEL = "testnet-simulated"
 
 
 class EscrowLogic:
-    def __init__(self):
-        self.escrow = Escrow()
-        self.by_booking: dict[str, str] = {}
+    def __init__(self, store=None):
+        self.store = store if store is not None else MemoryStore()
+        self.escrow = Escrow(self.store)
+
+    @property
+    def by_booking(self) -> dict:
+        return self.store.get("by_booking", {})
 
     def handle_intent(self, intent: PaymentIntent) -> PaymentReceipt:
         """pending -> hold; release / refund act on the existing hold."""
         bid = intent.booking_id
         if intent.status == "pending":
             if bid not in self.by_booking:
-                self.by_booking[bid] = self.escrow.hold(intent.amount)
+                self.store.set("by_booking", {**self.by_booking, bid: self.escrow.hold(intent.amount)})
         elif bid not in self.by_booking:
             raise EscrowError(f"no escrow for booking {bid}")
         eid = self.by_booking[bid]

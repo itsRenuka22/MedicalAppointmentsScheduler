@@ -3,3 +3,5 @@ __pycache__/
 .pytest_cache/
 .venv/
 *.pyc
+sooner/deploy_state.json
+deploy_state.json

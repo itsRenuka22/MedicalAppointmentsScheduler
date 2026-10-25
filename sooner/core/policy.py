@@ -9,7 +9,6 @@ from typing import Optional
 from sooner.core.slots import OPEN, Slot
 from sooner.shared.models import SlotRequest
 
-DATA = Path(__file__).resolve().parent.parent / "data" / "clinics.json"
 
 
 def haversine_miles(lat1, lng1, lat2, lng2) -> float:
@@ -58,7 +57,9 @@ class Clinic:
         return min(eligible, key=lambda s: s.time, default=None)
 
 
-def load_clinics(path: Path = DATA) -> dict[str, Clinic]:
+def load_clinics(path: Optional[Path] = None) -> dict[str, Clinic]:
+    # __file__ only inside the function: hosted agents have no __file__ at import time
+    path = path or Path(__file__).resolve().parent.parent / "data" / "clinics.json"
     raw = json.loads(Path(path).read_text())
     clinics = {}
     for c in raw["clinics"]:
