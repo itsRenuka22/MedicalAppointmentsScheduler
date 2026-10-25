@@ -1,4 +1,5 @@
 """PatientAgent: ASI:One-facing chat agent. Books and pays only on an explicit card tap."""
+from pathlib import Path
 from typing import Awaitable, Callable, Optional
 
 from sooner.agents.intent import parse_intent
@@ -57,7 +58,8 @@ def build_agent(matchmaker_address: str, escrow_address: str, clinic_addresses: 
     from sooner.shared import config
 
     agent = Agent(name="sooner_patient", seed=config.seed("patient"), port=config.PORTS["patient"],
-                  mailbox=True)
+                  mailbox=True, publish_agent_details=True,
+                  readme_path=str(Path(__file__).with_name("patient_README.md")))
     chat = Protocol(spec=chat_protocol_spec)
     sessions: dict[str, PatientLogic] = {}
 
@@ -82,8 +84,27 @@ def build_agent(matchmaker_address: str, escrow_address: str, clinic_addresses: 
                 lambda r: send_recv(matchmaker_address, r, RankedOffers),
                 lambda cid, b: send_recv(clinic_addresses[cid], b, BookingResult),
                 lambda p: send_recv(escrow_address, p, PaymentReceipt))
-        reply = await logic.handle_message(msg.text())
+        try:
+            reply = await logic.handle_message(msg.text())
+        except Exception as e:  # always answer the chat instead of leaving it hanging
+            ctx.logger.exception("handler failed")
+            reply = f"Sorry, something went wrong ({type(e).__name__}). Please try again."
         await ctx.send(sender, ChatMessage(content=[TextContent(type="text", text=reply)]))
 
     agent.include(chat, publish_manifest=True)
     return agent
+
+
+def main():
+    """Standalone entry point: python -m sooner.agents.patient_agent (Bureau runs the rest)."""
+    from sooner.shared.config import CLINIC_IDS, agent_address, ensure_event_loop
+    ensure_event_loop()
+    agent = build_agent(agent_address("matchmaker"), agent_address("escrow"),
+                        {cid: agent_address(cid) for cid in CLINIC_IDS})
+    print(SYNTHETIC_NOTICE)
+    print(f"sooner_patient address: {agent.address}")
+    agent.run()
+
+
+if __name__ == "__main__":
+    main()

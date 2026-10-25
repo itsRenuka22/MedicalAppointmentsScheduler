@@ -40,17 +40,29 @@ def regex_parse(text: str) -> dict:
             "radius_miles": float(rad.group(1)) if rad else 10.0}
 
 
+SPECIALTY_ALIASES = {"dermatologist": "dermatology", "skin": "dermatology",
+                     "primary care": "general", "primary": "general", "gp": "general",
+                     "dentist": "dental", "dentistry": "dental"}
+
+
+def normalize_specialty(value: str) -> str:
+    """The LLM may say 'dermatologist'; clinics advertise 'dermatology'."""
+    v = str(value).strip().lower()
+    return SPECIALTY_ALIASES.get(v, v)
+
+
 def parse_intent(text: str, location: LatLng, address: str, now: Optional[datetime] = None,
                  llm: Optional[Callable[[str], dict]] = None) -> SlotRequest:
     now = now or datetime.now()
     if llm is None:
         llm = asi1_llm if config.ASI1_API_KEY else regex_parse
+    d = regex_parse(text)  # defaults for anything the LLM omits or returns as null
     try:
-        d = llm(text)
+        d.update({k: v for k, v in llm(text).items() if v is not None})
     except Exception:
-        d = regex_parse(text)
+        pass
     return SlotRequest(
-        request_id=uuid.uuid4().hex[:8], specialty=str(d["specialty"]).lower(),
+        request_id=uuid.uuid4().hex[:8], specialty=normalize_specialty(d["specialty"]),
         time_window=TimeWindow(start=now, end=now + timedelta(days=int(d["days_ahead"]))),
         location=location, radius_miles=float(d["radius_miles"]), insurance=d["insurance"],
         max_deposit=float(d["max_deposit"]), patient_address=address)

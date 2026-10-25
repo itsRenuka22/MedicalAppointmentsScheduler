@@ -28,3 +28,16 @@ def test_escrow_agent_flow():
     e = EscrowLogic()
     assert e.handle_intent(PaymentIntent(booking_id="b", amount=5)).status == "held"
     assert e.handle_intent(PaymentIntent(booking_id="b", amount=5, status="refund")).status == "refunded"
+
+
+def test_llm_specialty_is_normalized():
+    llm = lambda t: {"specialty": "Dermatologist", "days_ahead": 3, "insurance": "Aetna",
+                     "max_deposit": 40, "radius_miles": 10}
+    assert parse_intent("x", LOC, "a", llm=llm).specialty == "dermatology"
+
+
+def test_llm_null_fields_fall_back_to_defaults():
+    llm = lambda t: {"specialty": "dermatology", "days_ahead": None, "insurance": "Aetna",
+                     "max_deposit": None, "radius_miles": None}
+    r = parse_intent("x", LOC, "a", llm=llm)
+    assert r.max_deposit == 50.0 and r.radius_miles == 10.0
